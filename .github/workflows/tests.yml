@@ -65,21 +65,12 @@ jobs:
         run: |
           OUTPUT="${{ steps.run.outputs.output }}"
           INSTANCE_ID=$(echo "$OUTPUT" | grep -o 'ocid1\.instance\.[^"]*' | head -1)
+          MSG="SUCCESS - Oracle VM Created! Time: ${{ steps.run.outputs.time }} | Attempt: ${{ github.run_number }} | ID: ${INSTANCE_ID} | STOP THE BOT NOW!"
           curl -s -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
             -d parse_mode="HTML" \
-            --data-urlencode text="🎉 <b>تم إنشاء Oracle VM بنجاح!</b>
-
-🕐 الوقت (مكة): ${{ steps.run.outputs.time }}
-🔢 بعد ${{ github.run_number }} محاولة
-🖥️ Instance ID:
-${INSTANCE_ID}
-
-📋 التفاصيل الكاملة:
-${OUTPUT}
-
-⛔ <b>أوقف البوت الآن من GitHub Actions!</b>
+            -d "text=${MSG}"
 للدخول للـ VM:
 ssh ubuntu@[IP_ADDRESS]"
 
