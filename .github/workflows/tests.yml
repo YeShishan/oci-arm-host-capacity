@@ -71,8 +71,6 @@ jobs:
             -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
             -d parse_mode="HTML" \
             -d "text=${MSG}"
-للدخول للـ VM:
-ssh ubuntu@[IP_ADDRESS]"
 
       - name: إشعار - VM موجود مسبقاً
         if: steps.run.outputs.status == 'exists'
