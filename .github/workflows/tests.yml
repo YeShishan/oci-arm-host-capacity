@@ -2,7 +2,7 @@ name: OCI Instance Creator
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -24,8 +24,8 @@ jobs:
           echo "${{ secrets.OCI_PRIVATE_KEY_FILENAME }}" > /tmp/oci_key.pem
           chmod 600 /tmp/oci_key.pem
 
-      - name: Run
-        id: run_script
+      - name: Run script
+        id: run
         env:
           OCI_REGION: ${{ secrets.OCI_REGION }}
           OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
@@ -43,42 +43,88 @@ jobs:
         run: |
           OUTPUT=$(php index.php 2>&1)
           echo "$OUTPUT"
-          echo "script_output<<EOF" >> $GITHUB_OUTPUT
+          echo "output<<EOF" >> $GITHUB_OUTPUT
           echo "$OUTPUT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Telegram - نجح
-        if: success()
+          MECCA_TIME=$(TZ='Asia/Riyadh' date '+%H:%M - %d/%m/%Y')
+          echo "time=$MECCA_TIME" >> $GITHUB_OUTPUT
+
+          if echo "$OUTPUT" | grep -qi "ocid1.instance"; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          elif echo "$OUTPUT" | grep -qi "out of host capacity\|InternalError"; then
+            echo "status=no_capacity" >> $GITHUB_OUTPUT
+          elif echo "$OUTPUT" | grep -qi "maximum\|already\|Max"; then
+            echo "status=exists" >> $GITHUB_OUTPUT
+          else
+            echo "status=error" >> $GITHUB_OUTPUT
+          fi
+
+      - name: إشعار - نجاح حقيقي
+        if: steps.run.outputs.status == 'success'
+        run: |
+          OUTPUT="${{ steps.run.outputs.output }}"
+          INSTANCE_ID=$(echo "$OUTPUT" | grep -o 'ocid1\.instance\.[^"]*' | head -1)
+          curl -s -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
+            -d parse_mode="HTML" \
+            --data-urlencode text="🎉 <b>تم إنشاء Oracle VM بنجاح!</b>
+
+🕐 الوقت (مكة): ${{ steps.run.outputs.time }}
+🔢 بعد ${{ github.run_number }} محاولة
+🖥️ Instance ID:
+${INSTANCE_ID}
+
+📋 التفاصيل الكاملة:
+${OUTPUT}
+
+⛔ <b>أوقف البوت الآن من GitHub Actions!</b>
+للدخول للـ VM:
+ssh ubuntu@[IP_ADDRESS]"
+
+      - name: إشعار - VM موجود مسبقاً
+        if: steps.run.outputs.status == 'exists'
         run: |
           curl -s -X POST \
-          "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
-          -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
-          -d parse_mode="HTML" \
-          -d text="$(cat <<EOF
-          ✅ <b>تم إنشاء Oracle VM بنجاح!</b>
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
+            -d parse_mode="HTML" \
+            --data-urlencode text="✅ <b>VM موجود بالفعل!</b>
 
-          🔢 رقم المحاولة: ${{ github.run_number }}
-          ⏰ الوقت: $(date '+%Y-%m-%d %H:%M UTC')
-          ⏱️ الفترة بين كل محاولة: 30 دقيقة
-          📋 النتيجة: ${{ steps.run_script.outputs.script_output }}
+🕐 الوقت (مكة): ${{ steps.run.outputs.time }}
+ℹ️ وصلت للحد الأقصى من الـ instances
 
-          ⛔ أوقف البوت الآن من GitHub Actions!
-          EOF
-          )"
+⛔ <b>أوقف البوت — الـ VM جاهز في Oracle Cloud!</b>"
 
-      - name: Telegram - فشل
-        if: failure()
+      - name: إشعار - خطأ غير متوقع
+        if: steps.run.outputs.status == 'error'
         run: |
           curl -s -X POST \
-          "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
-          -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
-          -d parse_mode="HTML" \
-          -d text="$(cat <<EOF
-          ❌ <b>فشلت المحاولة</b>
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
+            -d parse_mode="HTML" \
+            --data-urlencode text="⚠️ <b>خطأ غير متوقع!</b>
 
-          🔢 رقم المحاولة: ${{ github.run_number }}
-          ⏰ الوقت: $(date '+%Y-%m-%d %H:%M UTC')
-          ⏱️ المحاولة التالية بعد: 30 دقيقة
-          📋 السبب: ${{ steps.run_script.outputs.script_output }}
-          EOF
-          )"
+🕐 الوقت (مكة): ${{ steps.run.outputs.time }}
+🔢 المحاولة: ${{ github.run_number }}
+📋 التفاصيل:
+${{ steps.run.outputs.output }}"
+
+      - name: إشعار - تحديث كل ساعة
+        if: steps.run.outputs.status == 'no_capacity'
+        run: |
+          RUN_NUM=${{ github.run_number }}
+          if [ $((RUN_NUM % 12)) -eq 0 ]; then
+            curl -s -X POST \
+              "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
+              -d parse_mode="HTML" \
+              --data-urlencode text="📊 <b>تقرير كل ساعة</b>
+
+🕐 الوقت (مكة): ${{ steps.run.outputs.time }}
+🔢 عدد المحاولات حتى الآن: ${{ github.run_number }}
+📡 آخر رد من السيرفر: لا توجد سعة
+🔄 يحاول كل 5 دقائق تلقائياً
+⏳ لا تحتاج تفعل شيء — انتظر فقط!"
+          fi
