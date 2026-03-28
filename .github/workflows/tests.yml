@@ -1,4 +1,4 @@
-name: OCI Instance Creator
+name: OCI Instance Creator NV
 
 on:
   schedule:
@@ -46,10 +46,8 @@ jobs:
           echo "output<<EOF" >> $GITHUB_OUTPUT
           echo "$OUTPUT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-
           MECCA_TIME=$(TZ='Asia/Riyadh' date '+%H:%M - %d/%m/%Y')
           echo "time=$MECCA_TIME" >> $GITHUB_OUTPUT
-
           if echo "$OUTPUT" | grep -qi "ocid1.instance"; then
             echo "status=success" >> $GITHUB_OUTPUT
           elif echo "$OUTPUT" | grep -qi "out of host capacity\|InternalError"; then
@@ -60,47 +58,56 @@ jobs:
             echo "status=error" >> $GITHUB_OUTPUT
           fi
 
-      - name: إشعار - نجاح حقيقي
+      - name: Notify - Success
         if: steps.run.outputs.status == 'success'
         run: |
           OUTPUT="${{ steps.run.outputs.output }}"
           INSTANCE_ID=$(echo "$OUTPUT" | grep -o 'ocid1\.instance\.[^"]*' | head -1)
-          MSG="SUCCESS - Oracle VM Created! Time: ${{ steps.run.outputs.time }} | Attempt: ${{ github.run_number }} | ID: ${INSTANCE_ID} | STOP THE BOT NOW!"
           curl -s -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
             -d parse_mode="HTML" \
-            -d "text=${MSG}"
+            --data-urlencode text="🎉 <b>Oracle VM Created Successfully!</b>
 
-      - name: إشعار - VM موجود مسبقاً
+🕐 Time (Mecca): ${{ steps.run.outputs.time }}
+🔢 Attempt number: ${{ github.run_number }}
+🖥️ Instance ID: ${INSTANCE_ID}
+
+📋 Full output:
+${OUTPUT}
+
+⛔ <b>STOP THE BOT NOW from GitHub Actions!</b>
+To connect: ssh ubuntu@[IP_ADDRESS]"
+
+      - name: Notify - VM Already Exists
         if: steps.run.outputs.status == 'exists'
         run: |
           curl -s -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
             -d parse_mode="HTML" \
-            --data-urlencode text="✅ <b>VM موجود بالفعل!</b>
+            --data-urlencode text="✅ <b>VM already exists!</b>
 
-🕐 الوقت (مكة): ${{ steps.run.outputs.time }}
-ℹ️ وصلت للحد الأقصى من الـ instances
+🕐 Time (Mecca): ${{ steps.run.outputs.time }}
+ℹ️ Reached maximum number of instances.
 
-⛔ <b>أوقف البوت — الـ VM جاهز في Oracle Cloud!</b>"
+⛔ <b>STOP THE BOT - VM is ready in Oracle Cloud!</b>"
 
-      - name: إشعار - خطأ غير متوقع
+      - name: Notify - Unexpected Error
         if: steps.run.outputs.status == 'error'
         run: |
           curl -s -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
             -d parse_mode="HTML" \
-            --data-urlencode text="⚠️ <b>خطأ غير متوقع!</b>
+            --data-urlencode text="⚠️ <b>Unexpected Error!</b>
 
-🕐 الوقت (مكة): ${{ steps.run.outputs.time }}
-🔢 المحاولة: ${{ github.run_number }}
-📋 التفاصيل:
+🕐 Time (Mecca): ${{ steps.run.outputs.time }}
+🔢 Attempt: ${{ github.run_number }}
+📋 Details:
 ${{ steps.run.outputs.output }}"
 
-      - name: إشعار - تحديث كل ساعة
+      - name: Notify - Hourly Report
         if: steps.run.outputs.status == 'no_capacity'
         run: |
           RUN_NUM=${{ github.run_number }}
@@ -109,11 +116,11 @@ ${{ steps.run.outputs.output }}"
               "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
               -d parse_mode="HTML" \
-              --data-urlencode text="📊 <b>تقرير كل ساعة</b>
+              --data-urlencode text="📊 <b>Hourly Report</b>
 
-🕐 الوقت (مكة): ${{ steps.run.outputs.time }}
-🔢 عدد المحاولات حتى الآن: ${{ github.run_number }}
-📡 آخر رد من السيرفر: لا توجد سعة
-🔄 يحاول كل 5 دقائق تلقائياً
-⏳ لا تحتاج تفعل شيء — انتظر فقط!"
+🕐 Time (Mecca): ${{ steps.run.outputs.time }}
+🔢 Total attempts so far: ${{ github.run_number }}
+📡 Last server response: Out of host capacity
+🔄 Retrying every 5 minutes automatically
+⏳ No action needed - just wait!"
           fi
