@@ -1,4 +1,4 @@
-name: OCI Instance Creator NV
+name: OCI Instance Creator 1v
 
 on:
   schedule:
@@ -63,64 +63,34 @@ jobs:
         run: |
           OUTPUT="${{ steps.run.outputs.output }}"
           INSTANCE_ID=$(echo "$OUTPUT" | grep -o 'ocid1\.instance\.[^"]*' | head -1)
-          curl -s -X POST \
-            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
+          MSG="SUCCESS - Oracle VM Created! | Time (Mecca): ${{ steps.run.outputs.time }} | Attempt: ${{ github.run_number }} | Instance ID: ${INSTANCE_ID} | Full output: ${OUTPUT} | STOP THE BOT NOW from GitHub Actions!"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
-            -d parse_mode="HTML" \
-            --data-urlencode text="🎉 <b>Oracle VM Created Successfully!</b>
-
-🕐 Time (Mecca): ${{ steps.run.outputs.time }}
-🔢 Attempt number: ${{ github.run_number }}
-🖥️ Instance ID: ${INSTANCE_ID}
-
-📋 Full output:
-${OUTPUT}
-
-⛔ <b>STOP THE BOT NOW from GitHub Actions!</b>
-To connect: ssh ubuntu@[IP_ADDRESS]"
+            --data-urlencode text="${MSG}"
 
       - name: Notify - VM Already Exists
         if: steps.run.outputs.status == 'exists'
         run: |
-          curl -s -X POST \
-            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
+          MSG="VM ALREADY EXISTS | Time (Mecca): ${{ steps.run.outputs.time }} | Max instances reached | STOP THE BOT - VM is ready in Oracle Cloud!"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
-            -d parse_mode="HTML" \
-            --data-urlencode text="✅ <b>VM already exists!</b>
-
-🕐 Time (Mecca): ${{ steps.run.outputs.time }}
-ℹ️ Reached maximum number of instances.
-
-⛔ <b>STOP THE BOT - VM is ready in Oracle Cloud!</b>"
+            --data-urlencode text="${MSG}"
 
       - name: Notify - Unexpected Error
         if: steps.run.outputs.status == 'error'
         run: |
-          curl -s -X POST \
-            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
+          MSG="UNEXPECTED ERROR | Time (Mecca): ${{ steps.run.outputs.time }} | Attempt: ${{ github.run_number }} | Details: ${{ steps.run.outputs.output }}"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
-            -d parse_mode="HTML" \
-            --data-urlencode text="⚠️ <b>Unexpected Error!</b>
-
-🕐 Time (Mecca): ${{ steps.run.outputs.time }}
-🔢 Attempt: ${{ github.run_number }}
-📋 Details:
-${{ steps.run.outputs.output }}"
+            --data-urlencode text="${MSG}"
 
       - name: Notify - Hourly Report
         if: steps.run.outputs.status == 'no_capacity'
         run: |
           RUN_NUM=${{ github.run_number }}
           if [ $((RUN_NUM % 12)) -eq 0 ]; then
-            curl -s -X POST \
-              "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
+            MSG="HOURLY REPORT | Time (Mecca): ${{ steps.run.outputs.time }} | Total attempts: ${{ github.run_number }} | Server response: Out of capacity | Retrying every 5 minutes automatically"
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_API_KEY }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_USER_ID }}" \
-              -d parse_mode="HTML" \
-              --data-urlencode text="📊 <b>Hourly Report</b>
-
-🕐 Time (Mecca): ${{ steps.run.outputs.time }}
-🔢 Total attempts so far: ${{ github.run_number }}
-📡 Last server response: Out of host capacity
-🔄 Retrying every 5 minutes automatically
-⏳ No action needed - just wait!"
+              --data-urlencode text="${MSG}"
           fi
